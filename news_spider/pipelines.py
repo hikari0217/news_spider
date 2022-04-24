@@ -3,6 +3,7 @@ import scrapy
 import os
 from news_spider.settings import IMAGES_STORE as IMGS
 
+
 global i
 i=0
 

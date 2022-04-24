@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from scrapy_splash import SplashRequest
 import time
 import base64
+import binary_upload
 
 #启动splash
 

@@ -5,11 +5,22 @@ from bs4 import BeautifulSoup
 from scrapy_splash import SplashRequest
 import time
 import base64
-import binary_upload
 
 start = time.time()
 global num
 num=0
+
+#记录层数
+global i
+i=1
+
+#当前爬取层数
+global now
+now=1
+
+#外链解析中的链接采用键值对存储，链接作为key，层数作为values，可以通过控制values的上限控制其爬取层数
+global url_dic
+url_dic={}
 
 # script = """
 #                 function main(splash, args)
@@ -21,6 +32,7 @@ num=0
 #                   return {html=splash:html()}
 #                 end
 #                 """
+
 script_png = """
                 function main(splash, args)
                 splash:go(splash.args.url)
@@ -53,28 +65,56 @@ class HzSpider(scrapy.Spider):
         links = link.extract_links(response)
         return links
 
+    def link_add(self, links):
+        global i
+        global url_dic
+        for link in links:
+            key = link.url
+            url_dic[key]= i
+        i = i + 1
+        return url_dic
+
     def pic_find(self, response):
         html = response.text
         soup = BeautifulSoup(html, 'html.parser')
         pic_list = soup.find_all('img')
         return pic_list
 
+    def url_edit(self,pic):
+        url = pic
+        head = 'http'
+        if head in url:
+            pic = url
+        else:
+            pic = 'http:' + url
+
+        return pic
+
     def parse(self, response):
         global i
+        global now
+        global url_dic
+
         pic_list = self.pic_find(response)
-        head = 'http'
         for pic in pic_list:
             item = hzItem()
             item['img_name'] = 'hz'
             pic_src = pic['src']
-            if head in pic_src:
-                item['img_src'] = pic_src
-            else:
-                item['img_src'] = 'http:' + pic_src
+            item['img_src']=self.url_edit(pic_src)
 
             yield item
 
-        # links = self.links_return(response)
-        # for link in links:
-        #     yield scrapy.Request(link.url, callback=self.parse)
+        links = self.links_return(response)
+        url_dic = self.link_add(links)
+
+        if (now > 0 and i < 4):
+            for key, values in url_dic.items():
+                url = key
+                if (values == now):
+                    yield scrapy.Request(url, callback=self.parse)
+                    yield SplashRequest(url, self.pic_save, endpoint='execute',args={'lua_source': script_png, 'images': 0})
+            now = now + 1
+
+
+
 

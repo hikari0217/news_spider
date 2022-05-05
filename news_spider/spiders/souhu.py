@@ -4,7 +4,6 @@ from scrapy.linkextractors import LinkExtractor
 from bs4 import BeautifulSoup
 from scrapy_splash import SplashRequest
 import base64
-import binary_upload
 
 #启动splash
 
@@ -65,7 +64,9 @@ class SouhuSpider(scrapy.Spider):
         #截图命名
         fname = 'souhu'+str(num) +'.png'
         with open(fname, 'wb') as f:
-             f.write(base64.b64decode(response.data['png']))
+             bts=base64.b64decode(response.data['png'])
+             f.write(bts)
+             # print(binary_upload.make_file_java_byte_array_compatible(bts))
 
     #返回页面中所有链接
     def links_return(self, response):
@@ -73,6 +74,7 @@ class SouhuSpider(scrapy.Spider):
         global url_dic
         link = LinkExtractor()
         links = link.extract_links(response)
+
         return links
 
     #找到所有img标签

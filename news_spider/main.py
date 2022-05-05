@@ -1,19 +1,28 @@
-from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
-import time
+from scrapy.crawler import CrawlerProcess
 
-settings = get_project_settings()
+def main():
+    setting = get_project_settings()
+    process = CrawlerProcess(setting)
+    didntWorkSpider = ['souhu', 'qq', 'zjol', 'hz']
 
-start = time.time()
-print("开始爬图片")
+    for spider_name in process.spider_loader.list():
+        if spider_name in didntWorkSpider :
+            continue
+        print("Running spider %s" % (spider_name))
+        process.crawl(spider_name)
+    process.start()
 
-crawler = CrawlerProcess(settings)
+main()
 
-crawler.crawl('souhu')
-crawler.crawl('qq')
-crawler.crawl('hz')
-crawler.crawl('zjol')
 
-crawler.start()
 
-end = time.time()
+# crawler = CrawlerProcess(settings)
+#
+# crawler.crawl('souhu')
+# crawler.crawl('qq')
+# crawler.crawl('hz')
+# crawler.crawl('zjol')
+#
+# crawler.start()
+

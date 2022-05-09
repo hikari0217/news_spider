@@ -123,4 +123,4 @@ class SouhuSpider(scrapy.Spider):
                 if (values==now):
                     yield SplashRequest(url, self.parse,  endpoint='execute', args={'lua_source': script, 'url': url})
                     yield SplashRequest(url, self.pic_save, endpoint='execute', args={'lua_source': script_png, 'images': 0})
-            now=now+1
+            now = now +1

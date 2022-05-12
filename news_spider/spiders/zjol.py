@@ -8,17 +8,17 @@ import base64
 
 #启动splash
 
-#截图序号
+# 截图序号
 global num
-num=0
+num = 0
 
-#记录层数
-global i
-i=1
+# 记录层数
+global level
+level = 1
 
-#当前爬取层数
-global now
-now=1
+# 当前爬取层数
+global now_level
+now_level = 1
 
 #外链解析中的链接采用键值对存储，链接作为key，层数作为values，可以通过控制values的上限控制其爬取层数
 global url_dic
@@ -66,12 +66,12 @@ class ZjolSpider(scrapy.Spider):
 
         # 加到待爬取列表里
     def link_add(self, links):
-        global i
+        global level
         global url_dic
         for link in links:
             key = link.url
-            url_dic[key] = i
-        i = i + 1
+            url_dic[key] = level
+        level = level + 1
         return url_dic
 
 
@@ -101,8 +101,8 @@ class ZjolSpider(scrapy.Spider):
         return pic_url
 
     def parse(self, response):
-        global i
-        global now
+        global level
+        global now_level
         pic_list = self.pic_find(response)
         for pic in pic_list:
             item = hzItem()
@@ -114,10 +114,10 @@ class ZjolSpider(scrapy.Spider):
         links = self.links_return(response)
         url_dic = self.link_add(links)
         # 改变i的值来控制爬取层数
-        if (now > 0 and i < 4):
+        if (now_level > 0 and level < 4):
             for key, values in url_dic.items():
                 url = key
-                if (values == now):
+                if (values == now_level):
                     yield SplashRequest(url, self.parse, endpoint='execute', args={'lua_source': script, 'url': url})
                     yield SplashRequest(url, self.pic_save, endpoint='execute',args={'lua_source': script_png, 'images': 0})
-            now = now + 1
+            now_level = now_level + 1

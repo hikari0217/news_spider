@@ -96,7 +96,6 @@ class HzSpider(scrapy.Spider):
         global url_dic
 
         pic_list = self.pic_find(response)
-        print(img_url)
         for pic in pic_list:
             item = hzItem()
             item['img_name'] = 'hz'

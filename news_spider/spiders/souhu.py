@@ -107,11 +107,14 @@ class SouhuSpider(scrapy.Spider):
         global now_level
         global url_dic
         pic_list = self.pic_find(response)
+        print(response.url)
         for pic in pic_list:
             item = SouhuItem()
             item['img_name'] = 'souhu'
             pic_src = pic['src']
             item['img_src'] = self.url_edit(pic_src)
+            item['img_url'] = response.url
+            item['html']=response
             yield item
 
         links = self.links_return(response)

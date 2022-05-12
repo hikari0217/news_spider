@@ -50,7 +50,7 @@ class HzSpider(scrapy.Spider):
     def start_requests(self):
         url = 'https://www.hangzhou.com.cn/'
         yield scrapy.Request(url, self.parse)
-        yield SplashRequest(url, self.pic_save, endpoint='execute', args={'lua_source': script_png, 'images': 0})
+        #yield SplashRequest(url, self.pic_save, endpoint='execute', args={'lua_source': script_png, 'images': 0})
 
     def pic_save(self, response):
         global num
@@ -96,12 +96,14 @@ class HzSpider(scrapy.Spider):
         global url_dic
 
         pic_list = self.pic_find(response)
+        print(img_url)
         for pic in pic_list:
             item = hzItem()
             item['img_name'] = 'hz'
             pic_src = pic['src']
             item['img_src']=self.url_edit(pic_src)
-
+            item['img_url'] = response.url
+            item['html'] = response
             yield item
 
         links = self.links_return(response)

@@ -103,8 +103,10 @@ class QqSpider(scrapy.Spider):
             item['img_name'] = 'qq'
             pic_src = pic['src']
             item['img_src']=self.url_edit(pic_src)
-
+            item['img_url'] = response.url
+            item['html'] = response
             yield item
+
             # 改变i的值来控制爬取层数
             if (now_level > 0 and level < 4):
                 for key, values in url_dic.items():

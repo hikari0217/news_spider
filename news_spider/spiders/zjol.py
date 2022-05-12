@@ -24,6 +24,9 @@ now_level = 1
 global url_dic
 url_dic={}
 
+global now_url
+now_url=''
+
 
 script = """
                 function main(splash, args)
@@ -47,6 +50,12 @@ script_png = """
                 end
                 """
 
+script_url ="""
+                function main(splash, args)
+                splash:go(args.url)                
+                return {url=splash:url()}
+                end
+            """
 class ZjolSpider(scrapy.Spider):
     name = 'zjol'
 
@@ -54,6 +63,10 @@ class ZjolSpider(scrapy.Spider):
         url = 'https://www.zjol.com.cn/'
         yield SplashRequest(url, self.parse,  endpoint='execute', args={'lua_source': script, 'url': url})
         yield SplashRequest(url, self.pic_save, endpoint='execute', args={'lua_source': script_png, 'images': 0})
+
+    def catch_url(self,response):
+        now_url=response
+        return now_url
 
     def pic_save(self, response):
         with open('浙江在线.png', 'wb') as f:
@@ -103,12 +116,15 @@ class ZjolSpider(scrapy.Spider):
     def parse(self, response):
         global level
         global now_level
+        global now_url
         pic_list = self.pic_find(response)
         for pic in pic_list:
             item = hzItem()
             item['img_name'] = 'zjol'
             pic_src = pic['src']
             item['img_src'] = self.url_edit(pic_src)
+            item['img_url'] = response.url
+            item['html'] = response
             yield item
 
         links = self.links_return(response)

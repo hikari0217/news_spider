@@ -1,9 +1,13 @@
+from io import BytesIO
+
 import scrapy
 from news_spider.items import SouhuItem
 from scrapy.linkextractors import LinkExtractor
 from bs4 import BeautifulSoup
 from scrapy_splash import SplashRequest
+import requests
 import base64
+from news_spider import sava2Hbase
 
 #启动splash
 
@@ -23,6 +27,15 @@ now_level=1
 global url_dic
 url_dic={}
 
+#存储图片url
+global img_src_list
+img_src_list=[]
+
+#存储图片字节数组
+global img_content_list
+img_content_list=[]
+
+
 #网页渲染脚本
 script = """
                 function main(splash, args)
@@ -36,37 +49,35 @@ script = """
         """
 
 #截图脚本
-script_png = """
-                function main(splash, args)
-                splash:go(splash.args.url)
-                splash:set_viewport_size(1500, 10000)                
-                local scroll_to = splash:jsfunc("window.scrollTo")
-                scroll_to(0, 2800)
-                splash:wait(8)
-                return {png=splash:png()}
-                end
-                """
+# script_png = """
+#                 function main(splash, args)
+#                 splash:go(splash.args.url)
+#                 splash:set_viewport_size(1500, 10000)
+#                 local scroll_to = splash:jsfunc("window.scrollTo")
+#                 scroll_to(0, 2800)
+#                 splash:wait(8)
+#                 return {png=splash:png()}
+#                 end
+#                 """
 
 class SouhuSpider(scrapy.Spider):
     name = 'souhu'
-    #allowed_domains = ['news.souhu.com']
-    #start_urls = ['https://news.sohu.com/']
 
     def start_requests(self):
         url = 'https://news.sohu.com/'
         yield SplashRequest(url, self.parse, endpoint='execute', args={'lua_source': script, 'url': url})
-        yield SplashRequest(url, self.pic_save, endpoint='execute', args={'lua_source': script_png, 'images': 0})
+        #调用脚本截图
+        #yield SplashRequest(url, self.pic_save, endpoint='execute', args={'lua_source': script_png, 'images': 0})
 
-    #保存截图
-    def pic_save(self, response):
-        global num
-        num=num+1
-        #截图命名
-        fname = 'souhu'+str(num) +'.png'
-        with open(fname, 'wb') as f:
-             bts=base64.b64decode(response.data['png'])
-             f.write(bts)
-             # print(binary_upload.make_file_java_byte_array_compatible(bts))
+    # #保存页面截图
+    # def pic_save(self, response):
+    #     global num
+    #     num=num+1
+    #     #截图命名
+    #     fname = 'souhu'+str(num) +'.png'
+    #     with open(fname, 'wb') as f:
+    #          bts=base64.b64decode(response.data['png'])
+    #          f.write(bts)
 
     #返回页面中所有链接
     def links_return(self, response):
@@ -90,7 +101,7 @@ class SouhuSpider(scrapy.Spider):
         global url_dic
         for link in links:
             key = link.url
-            url_dic[key]= level
+            url_dic[key] = level
         level = level + 1
         return url_dic
 
@@ -106,16 +117,43 @@ class SouhuSpider(scrapy.Spider):
         global level
         global now_level
         global url_dic
+        global img_content_list
+        global img_src_list
+
+        #找到所有图片url
         pic_list = self.pic_find(response)
-        print(response.url)
-        for pic in pic_list:
-            item = SouhuItem()
-            item['img_name'] = 'souhu'
+
+        item = SouhuItem()
+        item['img_name'] = 'souhu'
+        item['img_url'] = response.url
+        item['html']=response
+
+        for pic in pic_list:            
             pic_src = pic['src']
-            item['img_src'] = self.url_edit(pic_src)
-            item['img_url'] = response.url
-            item['html']=response
-            yield item
+            src = self.url_edit(pic_src)
+
+            img_src_list.append(src)
+            #获取图片响应
+            pic_res = requests.get(src)
+
+            if pic_res.status_code == 200:
+                pic_res.encoding = 'gbk'
+            d = BytesIO(pic_res.content)
+            data = []
+            while True:
+                t = d.read(1)
+                if not t:
+                    break
+                data.append(t)
+            data = sava2Hbase.jb2jb(data)
+            img_content_list.append(data)
+
+        #图片字节数组列表
+        item['img_content']=img_content_list
+        #图片url列表
+        item['img_src']=img_src_list
+
+        yield item
 
         links = self.links_return(response)
         url_dic=self.link_add(links)

@@ -1,26 +1,39 @@
+from io import BytesIO
+
+import requests
 import scrapy
 from news_spider.items import qqItem
 from scrapy.linkextractors import LinkExtractor
 from bs4 import BeautifulSoup
 from scrapy_splash import SplashRequest
+import sava2Hbase
 import time
 import base64
 
 #截图序号
 global num
-num=0
+num = 0
 
 #记录层数
 global level
-level=1
+level = 1
 
 #当前爬取层数
 global now_level
-now_level=1
+now_level = 1
 
 #外链解析中的链接采用键值对存储，链接作为key，层数作为values，可以通过控制values的上限控制其爬取层数
 global url_dic
-url_dic={}
+url_dic = {}
+
+#存储图片url
+global img_src_list
+img_src_list=[]
+
+#存储图片字节数组
+global img_content_list
+img_content_list=[]
+
 
 script = """
                 function main(splash, args)
@@ -32,16 +45,17 @@ script = """
                   return {html=splash:html()}
                 end
                 """
-script_png = """
-                function main(splash, args)
-                splash:go(splash.args.url)
-                splash:set_viewport_size(1500, 10000)                
-                local scroll_to = splash:jsfunc("window.scrollTo")
-                scroll_to(0, 2800)
-                splash:wait(8)
-                return {png=splash:png()}
-                end
-                """
+#截图脚本
+# script_png = """
+#                 function main(splash, args)
+#                 splash:go(splash.args.url)
+#                 splash:set_viewport_size(1500, 10000)
+#                 local scroll_to = splash:jsfunc("window.scrollTo")
+#                 scroll_to(0, 2800)
+#                 splash:wait(8)
+#                 return {png=splash:png()}
+#                 end
+#                 """
 class QqSpider(scrapy.Spider):
     name = 'qq'
     #allowed_domains = ['news.qq.com']
@@ -50,15 +64,15 @@ class QqSpider(scrapy.Spider):
     def start_requests(self):
         url = 'https://www.qq.com/'
         yield SplashRequest(url, self.parse,  endpoint='execute', args={'lua_source': script, 'url': url})
-        yield SplashRequest(url, self.pic_save, endpoint='execute', args={'lua_source': script_png, 'images': 0})
+        #yield SplashRequest(url, self.pic_save, endpoint='execute', args={'lua_source': script_png, 'images': 0})
 
 
-    def pic_save(self, response):
-        global num
-        num = num + 1
-        fname = 'qq' + str(num) + '.png'
-        with open(fname, 'wb') as f:
-             f.write(base64.b64decode(response.data['png']))
+    # def pic_save(self, response):
+    #     global num
+    #     num = num + 1
+    #     fname = 'qq' + str(num) + '.png'
+    #     with open(fname, 'wb') as f:
+    #          f.write(base64.b64decode(response.data['png']))
 
     def links_return(self, response):
         global level
@@ -97,23 +111,50 @@ class QqSpider(scrapy.Spider):
         global level
         global now_level
         global url_dic
-        pic_list = self.pic_find(response)
-        for pic in pic_list:
-            item = qqItem()
-            item['img_name'] = 'qq'
-            pic_src = pic['src']
-            item['img_src']=self.url_edit(pic_src)
-            item['img_url'] = response.url
-            item['html'] = response
-            yield item
+        global img_content_list
+        global img_src_list
 
-            # 改变i的值来控制爬取层数
-            if (now_level > 0 and level < 4):
-                for key, values in url_dic.items():
-                    url = key
-                    if (values == now_level):
-                        yield SplashRequest(url, self.parse, endpoint='execute',
-                                            args={'lua_source': script, 'url': url})
-                        yield SplashRequest(url, self.pic_save, endpoint='execute',
-                                            args={'lua_source': script_png, 'images': 0})
-                now_level = now_level + 1
+        pic_list = self.pic_find(response)
+
+        item = qqItem()
+        item['img_name'] = 'qq'
+        item['img_url'] = response.url
+        item['html'] = response
+
+        for pic in pic_list:
+            pic_src = pic['src']
+            src = self.url_edit(pic_src)
+
+            img_src_list.append(src)
+            # 获取图片响应
+            pic_res = requests.get(src)
+
+            if pic_res.status_code == 200:
+                pic_res.encoding = 'gbk'
+            d = BytesIO(pic_res.content)
+            data = []
+            while True:
+                t = d.read(1)
+                if not t:
+                    break
+                data.append(t)
+            data = sava2Hbase.jb2jb(data)
+            img_content_list.append(data)
+
+        # 图片字节数组列表
+        item['img_content'] = img_content_list
+        # 图片url列表
+        item['img_src'] = img_src_list
+
+        yield item
+
+        # 改变i的值来控制爬取层数
+        if (now_level > 0 and level < 4):
+            for key, values in url_dic.items():
+                url = key
+                if (values == now_level):
+                    yield SplashRequest(url, self.parse, endpoint='execute',
+                                        args={'lua_source': script, 'url': url})
+                        # yield SplashRequest(url, self.pic_save, endpoint='execute',
+                        #                     args={'lua_source': script_png, 'images': 0})
+            now_level = now_level + 1

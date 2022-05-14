@@ -1,8 +1,13 @@
+from io import BytesIO
+
 import scrapy
 from scrapy.linkextractors import LinkExtractor
-from news_spider.items import hzItem
+
+import sava2Hbase
+from news_spider.items import zjolItem
 from bs4 import BeautifulSoup
 from scrapy_splash import SplashRequest
+import requests
 import time
 import base64
 
@@ -24,8 +29,14 @@ now_level = 1
 global url_dic
 url_dic={}
 
-global now_url
-now_url=''
+#存储图片url
+global img_src_list
+img_src_list=[]
+
+#存储图片字节数组
+global img_content_list
+img_content_list=[]
+
 
 
 script = """
@@ -37,40 +48,34 @@ script = """
                 splash:wait(8)
                 return {html=splash:html()}
                 end 
+ 
         """
 
-script_png = """
-                function main(splash, args)
-                splash:go(splash.args.url)
-                splash:set_viewport_size(1500, 10000)                
-                local scroll_to = splash:jsfunc("window.scrollTo")
-                scroll_to(0, 2800)
-                splash:wait(8)
-                return {png=splash:png()}
-                end
-                """
+#截图脚本
+# script_png = """
+#                 function main(splash, args)
+#                 splash:go(splash.args.url)
+#                 splash:set_viewport_size(1500, 10000)
+#                 local scroll_to = splash:jsfunc("window.scrollTo")
+#                 scroll_to(0, 2800)
+#                 splash:wait(8)
+#                 return {png=splash:png()}
+#                 end
+#                 """
 
-script_url ="""
-                function main(splash, args)
-                splash:go(args.url)                
-                return {url=splash:url()}
-                end
-            """
 class ZjolSpider(scrapy.Spider):
     name = 'zjol'
 
     def start_requests(self):
         url = 'https://www.zjol.com.cn/'
         yield SplashRequest(url, self.parse,  endpoint='execute', args={'lua_source': script, 'url': url})
-        yield SplashRequest(url, self.pic_save, endpoint='execute', args={'lua_source': script_png, 'images': 0})
+        # yield SplashRequest(url, self.pic_save, endpoint='execute', args={'lua_source': script_png, 'images': 0})
 
-    def catch_url(self,response):
-        now_url=response
-        return now_url
 
-    def pic_save(self, response):
-        with open('浙江在线.png', 'wb') as f:
-             f.write(base64.b64decode(response.data['png']))
+    #截图保存
+    # def pic_save(self, response):
+    #     with open('浙江在线.png', 'wb') as f:
+    #          f.write(base64.b64decode(response.data['png']))
 
     def links_return(self, response):
         link = LinkExtractor()
@@ -116,16 +121,42 @@ class ZjolSpider(scrapy.Spider):
     def parse(self, response):
         global level
         global now_level
-        global now_url
+        global url_dic
+        global img_content_list
+        global img_src_list
+
         pic_list = self.pic_find(response)
+
+        item = zjolItem()
+        item['img_name'] = 'souhu'
+        item['img_url'] = response.url
+        item['html'] = response
+
         for pic in pic_list:
-            item = hzItem()
-            item['img_name'] = 'zjol'
             pic_src = pic['src']
-            item['img_src'] = self.url_edit(pic_src)
-            item['img_url'] = response.url
-            item['html'] = response
-            yield item
+            src = self.url_edit(pic_src)
+            img_src_list.append(src)
+            # 获取图片响应
+            pic_res = requests.get(src)
+
+            if pic_res.status_code == 200:
+                pic_res.encoding = 'gbk'
+            d = BytesIO(pic_res.content)
+            data = []
+            while True:
+                t = d.read(1)
+                if not t:
+                    break
+                data.append(t)
+            data = sava2Hbase.jb2jb(data)
+            img_content_list.append(data)
+
+            # 图片字节数组列表
+        item['img_content'] = img_content_list
+        # 图片url列表
+        item['img_src'] = img_src_list
+
+        yield item
 
         links = self.links_return(response)
         url_dic = self.link_add(links)
